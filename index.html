@@ -1029,6 +1029,37 @@ body.admin-mode .card-num{top:4.95rem}
   .card-admin-actions{flex-wrap:wrap}.card-admin-actions .danger{margin-left:0}
 }
 
+
+
+/* --- SUPABASE / PERSISTENCIA ----------------------------------- */
+.btn-db{
+  min-height:38px;padding:0 .72rem;border-radius:8px;
+  border:1px solid var(--border2);background:var(--surface);
+  color:var(--text2);cursor:pointer;display:inline-flex;
+  align-items:center;gap:.45rem;font-family:var(--font-m);
+  font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;
+  transition:all .2s;white-space:nowrap;
+}
+.btn-db:hover{border-color:var(--red);color:var(--red);background:rgba(139,0,0,.06)}
+.db-status-dot{width:7px;height:7px;border-radius:50%;background:#9ca3af;box-shadow:0 0 0 3px rgba(156,163,175,.14)}
+.btn-db[data-state="connected"] .db-status-dot{background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.13)}
+.btn-db[data-state="syncing"] .db-status-dot{background:#d97706;box-shadow:0 0 0 3px rgba(217,119,6,.13);animation:blink 1s ease-in-out infinite}
+.btn-db[data-state="error"] .db-status-dot{background:#dc2626;box-shadow:0 0 0 3px rgba(220,38,38,.13)}
+.db-config-note{font-size:.76rem;line-height:1.55;color:var(--text2)}
+.db-config-note code{font-family:var(--font-m);font-size:.7rem;color:var(--red-mid)}
+.db-config-actions{display:flex;gap:.55rem;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.db-config-actions-right{display:flex;gap:.55rem;margin-left:auto}
+.db-danger{color:#b91c1c!important;border-color:rgba(185,28,28,.25)!important}
+.db-danger:hover{background:rgba(185,28,28,.07)!important}
+body:not(.admin-mode) #shortcutAddBtn,
+body:not(.admin-mode) #categoryAddBtn,
+body:not(.admin-mode) .menu-btn{display:none!important}
+.sync-note{font-family:var(--font-m);font-size:.62rem;letter-spacing:.05em;color:var(--text3)}
+@media(max-width:780px){
+  .btn-db{font-size:0;width:38px;padding:0;justify-content:center}
+  .btn-db .db-status-dot{margin:0}
+}
+
 </style>
 </head>
 <body>
@@ -1051,6 +1082,10 @@ body.admin-mode .card-num{top:4.95rem}
         <span class="badge-live-dot"></span>
         En línea
       </div>
+      <button class="btn-db" id="dbConfigBtn" type="button" data-state="idle" title="Configurar conexión con Supabase">
+        <span class="db-status-dot" aria-hidden="true"></span>
+        <span id="dbStatusText">Configurar BD</span>
+      </button>
       <button class="btn-admin" id="adminBtn" type="button" title="Administrar tarjetas">&#128274; Administrar</button>
       <button class="btn-theme" id="themeBtn" title="Cambiar tema">☀️</button>
     </div>
@@ -1152,6 +1187,7 @@ body.admin-mode .card-num{top:4.95rem}
       <span><strong>Modo administrador activo.</strong> Puedes editar, ordenar, agregar o eliminar tarjetas.</span>
     </div>
     <div class="admin-toolbar-actions">
+      <button class="admin-action-btn" type="button" id="syncNowBtn">Sincronizar</button>
       <button class="admin-action-btn" type="button" id="resetCardsBtn">Restablecer tarjetas</button>
       <button class="admin-action-btn primary" type="button" id="addCardBtn">+ Agregar tarjeta</button>
     </div>
@@ -1197,17 +1233,21 @@ body.admin-mode .card-num{top:4.95rem}
     <div class="admin-dialog-head">
       <div>
         <div class="admin-dialog-title" id="adminLoginTitle">ACCESO ADMINISTRADOR</div>
-        <div class="admin-dialog-sub">Ingresa la contrase&ntilde;a para modificar las tarjetas.</div>
+        <div class="admin-dialog-sub">Inicia sesión con el usuario administrador creado en Supabase.</div>
       </div>
       <button class="admin-close" type="button" data-close-modal="adminLoginModal" aria-label="Cerrar">&times;</button>
     </div>
     <form class="admin-form" id="adminLoginForm">
       <div class="admin-field">
-        <label for="adminPassword">Contrase&ntilde;a</label>
+        <label for="adminEmail">Correo administrador</label>
+        <input id="adminEmail" type="email" autocomplete="username" placeholder="administrador@empresa.com" required>
+      </div>
+      <div class="admin-field">
+        <label for="adminPassword">Contraseña</label>
         <input id="adminPassword" type="password" autocomplete="current-password" required>
       </div>
       <div class="admin-message" id="adminLoginMessage"></div>
-      <div class="admin-hint">Esta protecci&oacute;n funciona dentro del navegador. Para seguridad corporativa real, el portal debe publicarse con autenticaci&oacute;n en un servidor.</div>
+      <div class="admin-hint">La contraseña ya no está dentro del HTML. Supabase Auth valida el acceso y las políticas RLS protegen las modificaciones.</div>
       <div class="admin-form-actions">
         <button class="admin-action-btn" type="button" data-close-modal="adminLoginModal">Cancelar</button>
         <button class="admin-action-btn primary" type="submit">Ingresar</button>
@@ -1221,7 +1261,7 @@ body.admin-mode .card-num{top:4.95rem}
     <div class="admin-dialog-head">
       <div>
         <div class="admin-dialog-title" id="cardEditorTitle">EDITAR TARJETA</div>
-        <div class="admin-dialog-sub">Los cambios quedan guardados en este navegador.</div>
+        <div class="admin-dialog-sub">Los cambios se guardan en Supabase y se comparten con todos los usuarios.</div>
       </div>
       <button class="admin-close" type="button" data-close-modal="cardEditorModal" aria-label="Cerrar">&times;</button>
     </div>
@@ -1277,9 +1317,47 @@ body.admin-mode .card-num{top:4.95rem}
     </form>
   </div>
 </div>
+
+<div class="admin-modal" id="dbConfigModal" aria-hidden="true">
+  <div class="admin-dialog" role="dialog" aria-modal="true" aria-labelledby="dbConfigTitle">
+    <div class="admin-dialog-head">
+      <div>
+        <div class="admin-dialog-title" id="dbConfigTitle">CONFIGURAR SUPABASE</div>
+        <div class="admin-dialog-sub">Conecta este portal con tu proyecto de Supabase.</div>
+      </div>
+      <button class="admin-close" type="button" data-close-modal="dbConfigModal" aria-label="Cerrar">&times;</button>
+    </div>
+    <form class="admin-form" id="dbConfigForm">
+      <div class="admin-form-grid">
+        <div class="admin-field full">
+          <label for="supabaseUrl">Project URL</label>
+          <input id="supabaseUrl" type="url" placeholder="https://tu-proyecto.supabase.co" required>
+        </div>
+        <div class="admin-field full">
+          <label for="supabaseKey">Publishable key / anon key</label>
+          <textarea id="supabaseKey" rows="3" placeholder="sb_publishable_... o eyJ..." required></textarea>
+        </div>
+      </div>
+      <div class="db-config-note">
+        Ejecuta primero el archivo <code>supabase_setup.sql</code> en SQL Editor. Usa únicamente la llave pública
+        <code>publishable</code> o <code>anon</code>; nunca coloques la llave <code>service_role</code> dentro del HTML.
+      </div>
+      <div class="admin-message" id="dbConfigMessage"></div>
+      <div class="db-config-actions">
+        <button class="admin-action-btn db-danger" type="button" id="dbConfigClearBtn">Quitar configuración</button>
+        <div class="db-config-actions-right">
+          <button class="admin-action-btn" type="button" data-close-modal="dbConfigModal">Cancelar</button>
+          <button class="admin-action-btn primary" type="submit">Guardar y probar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="admin-toast" id="adminToast" role="status" aria-live="polite"></div>
 
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ── TEMA ─────────────────────────────── */
 (function(){
@@ -1298,55 +1376,118 @@ body.admin-mode .card-num{top:4.95rem}
   }
 })();
 
-/* --- ADMINISTRACION DE TARJETAS -------------------------------- */
+/* --- CONTENIDO PERSISTENTE CON SUPABASE ------------------------- */
 (function(){
-  const grid=document.getElementById('cardsGrid');
-  const adminBtn=document.getElementById('adminBtn');
-  const addBtn=document.getElementById('addCardBtn');
-  const resetBtn=document.getElementById('resetCardsBtn');
-  const loginModal=document.getElementById('adminLoginModal');
-  const editorModal=document.getElementById('cardEditorModal');
-  const loginForm=document.getElementById('adminLoginForm');
-  const editorForm=document.getElementById('cardEditorForm');
-  const passwordInput=document.getElementById('adminPassword');
-  const loginMessage=document.getElementById('adminLoginMessage');
-  const editorMessage=document.getElementById('cardEditorMessage');
-  const editorTitle=document.getElementById('cardEditorTitle');
-  const tagInput=document.getElementById('editCardTag');
-  const titleInput=document.getElementById('editCardTitle');
-  const descriptionInput=document.getElementById('editCardDescription');
-  const urlInput=document.getElementById('editCardUrl');
-  const ctaInput=document.getElementById('editCardCta');
-  const arrowInput=document.getElementById('editCardArrow');
-  const iconInput=document.getElementById('editCardIcon');
-  const toast=document.getElementById('adminToast');
-  const countActive=document.getElementById('activeCardsCount');
-  const countEditable=document.getElementById('editableCardsCount');
-  if(!grid||!adminBtn)return;
+  'use strict';
 
-  const STORAGE_KEY='i_planning_cards_v1';
-  const SESSION_KEY='i_planning_admin_session';
-  const PASSWORD_SHA256='fdbb0cf09b78e48a355aa990fbcc0bf35ea255bdb55d5c8c1ebdec91b25f60ed';
-  const PASSWORD_FALLBACK_B64='aVBsYW4jNzQtVEFUQSEyNg==';
-  const DEFAULT_CARDS=[{"id":"eficiencia","tag":"Monitoreo","title":"EFICIENCIA EN VIVO","description":"Indicadores operativos y desempe\u00f1o de l\u00ednea actualizados en tiempo real.","url":"https://erp.tataguatemala.com/dashboards/eficiencia","cta":"Ingresar","arrow":"right","icon":"bolt"},{"id":"balances","tag":"An\u00e1lisis","title":"BALANCES","description":"Balanceo de l\u00edneas, distribuci\u00f3n de cargas y comportamiento por \u00e1rea de producci\u00f3n.","url":"https://balarcon-tata.github.io/Engineering-Nexus/","cta":"Ingresar","arrow":"right","icon":"scale"},{"id":"auditoria","tag":"Control","title":"AUDITOR\u00cdA DE PLANES","description":"Control, verificaci\u00f3n y revisi\u00f3n de planes de producci\u00f3n congelados.","url":"https://erp.tataguatemala.com/dashboards/congelado","cta":"Ingresar","arrow":"right","icon":"check"},{"id":"ocupacion","tag":"Capacidad","title":"OCUPACI\u00d3N","description":"Niveles de ocupaci\u00f3n, capacidad disponible y porcentaje de utilizaci\u00f3n por c\u00e9lula.","url":"http://172.16.3.127:3000/login","cta":"Ingresar","arrow":"right","icon":"pulse"},{"id":"despachos","tag":"Seguimiento","title":"DESPACHOS","description":"M\u00f3dulo de operaci\u00f3n para seguimiento y gesti\u00f3n de despachos de troquel.","url":"http://citizenapps.tata/troquel/#/operacion","cta":"Ingresar","arrow":"right","icon":"truck"},{"id":"muestras","tag":"Planificaci\u00f3n","title":"PLANIF. MUESTRAS","description":"Planificaci\u00f3n y gesti\u00f3n de la producci\u00f3n de muestras por \u00e1rea y orden de trabajo.","url":"https://balarcon-tata.github.io/fastreact-muestras/","cta":"Ingresar","arrow":"right","icon":"document"},{"id":"monday","tag":"Proyectos","title":"MONDAY","description":"Acceso directo al tablero de proyectos de Monday para seguimiento y coordinaci\u00f3n del equipo.","url":"https://tataaccessories.monday.com/boards/18413169480","cta":"Ingresar","arrow":"right","icon":"project"},{"id":"recurrentes","tag":"Marcadores","title":"ACCESOS RECURRENTES","description":"Muestra accesos directos en filas compactas, organizadas por categor\u00eda, con opciones para agregar, editar y eliminar.","url":"#accesos-recurrentes","cta":"Ver accesos","arrow":"down","icon":"link"},{"id":"maestros","tag":"Eficiencia","title":"MAESTROS DE EFICIENCIA","description":"Acceso directo a maestros de eficiencia para consulta y gesti\u00f3n operativa.","url":"https://www.tata.com.gt","cta":"Ingresar","arrow":"right","icon":"chart"}];
-  let cards=[];
-  let editingId=null;
-  let isAdmin=sessionStorage.getItem(SESSION_KEY)==='1';
+  const CONFIG_KEY='i_planning_supabase_config_v1';
+  const LAST_EMAIL_KEY='i_planning_admin_email';
+  // Opcional: puedes pegar aquí la URL y llave pública para distribuir un HTML ya configurado.
+  const EMBEDDED_CONFIG={url:'https://hzyrgracopykwcqodhgw.supabase.co',key:'sb_publishable_9i6-rrnXvt6HGLW_rEMP1w_oomJD5I7'};
 
-  function cloneDefaults(){return DEFAULT_CARDS.map((card)=>({...card}))}
-  function loadCards(){
+  const DEFAULT_CARDS=[
+    {id:'eficiencia',tag:'Monitoreo',title:'EFICIENCIA EN VIVO',description:'Indicadores operativos y desempeño de línea actualizados en tiempo real.',url:'https://erp.tataguatemala.com/dashboards/eficiencia',cta:'Ingresar',arrow:'right',icon:'bolt'},
+    {id:'balances',tag:'Análisis',title:'BALANCES',description:'Balanceo de líneas, distribución de cargas y comportamiento por área de producción.',url:'https://balarcon-tata.github.io/Engineering-Nexus/',cta:'Ingresar',arrow:'right',icon:'scale'},
+    {id:'auditoria',tag:'Control',title:'AUDITORÍA DE PLANES',description:'Control, verificación y revisión de planes de producción congelados.',url:'https://erp.tataguatemala.com/dashboards/congelado',cta:'Ingresar',arrow:'right',icon:'check'},
+    {id:'ocupacion',tag:'Capacidad',title:'OCUPACIÓN',description:'Niveles de ocupación, capacidad disponible y porcentaje de utilización por célula.',url:'http://172.16.3.127:3000/login',cta:'Ingresar',arrow:'right',icon:'pulse'},
+    {id:'despachos',tag:'Seguimiento',title:'DESPACHOS',description:'Módulo de operación para seguimiento y gestión de despachos de troquel.',url:'http://citizenapps.tata/troquel/#/operacion',cta:'Ingresar',arrow:'right',icon:'truck'},
+    {id:'muestras',tag:'Planificación',title:'PLANIF. MUESTRAS',description:'Planificación y gestión de la producción de muestras por área y orden de trabajo.',url:'https://balarcon-tata.github.io/fastreact-muestras/',cta:'Ingresar',arrow:'right',icon:'document'},
+    {id:'monday',tag:'Proyectos',title:'MONDAY',description:'Acceso directo al tablero de proyectos de Monday para seguimiento y coordinación del equipo.',url:'https://tataaccessories.monday.com/boards/18413169480',cta:'Ingresar',arrow:'right',icon:'project'},
+    {id:'recurrentes',tag:'Marcadores',title:'ACCESOS RECURRENTES',description:'Muestra accesos directos en filas compactas, organizadas por categoría, con opciones para agregar, editar y eliminar.',url:'#accesos-recurrentes',cta:'Ver accesos',arrow:'down',icon:'link'},
+    {id:'maestros',tag:'Eficiencia',title:'MAESTROS DE EFICIENCIA',description:'Acceso directo a maestros de eficiencia para consulta y gestión operativa.',url:'https://www.tata.com.gt',cta:'Ingresar',arrow:'right',icon:'chart'}
+  ];
+  const DEFAULT_CATEGORIES=['Monitoreo','Análisis','Control','Operación','Proyectos','Planificación','Maestros'];
+  const DEFAULT_SHORTCUTS=[
+    {id:'eficiencia',name:'Eficiencia en vivo',url:'https://erp.tataguatemala.com/dashboards/eficiencia',category:'Monitoreo'},
+    {id:'balances',name:'Balances',url:'https://balarcon-tata.github.io/Engineering-Nexus/',category:'Análisis'},
+    {id:'auditoria',name:'Auditoría de planes',url:'https://erp.tataguatemala.com/dashboards/congelado',category:'Control'},
+    {id:'ocupacion',name:'Ocupación',url:'http://172.16.3.127:3000/login',category:'Operación'},
+    {id:'despachos',name:'Despachos',url:'http://citizenapps.tata/troquel/#/operacion',category:'Operación'},
+    {id:'muestras',name:'Planif. muestras',url:'https://balarcon-tata.github.io/fastreact-muestras/',category:'Planificación'},
+    {id:'monday',name:'Monday proyectos',url:'https://tataaccessories.monday.com/boards/18413169480',category:'Proyectos'},
+    {id:'maestros-eficiencia',name:'Maestros de eficiencia',url:'https://www.tata.com.gt',category:'Maestros'}
+  ];
+
+  const state={
+    client:null,channel:null,authSubscription:null,isAdmin:false,busy:false,
+    cards:clone(DEFAULT_CARDS),categories:[...DEFAULT_CATEGORIES],shortcuts:clone(DEFAULT_SHORTCUTS),
+    activeCategory:'Todas',editingCardId:null,editingShortcutId:null,reloadTimer:null
+  };
+
+  const el={
+    grid:document.getElementById('cardsGrid'),adminBtn:document.getElementById('adminBtn'),
+    addCardBtn:document.getElementById('addCardBtn'),resetCardsBtn:document.getElementById('resetCardsBtn'),
+    syncNowBtn:document.getElementById('syncNowBtn'),countActive:document.getElementById('activeCardsCount'),
+    countEditable:document.getElementById('editableCardsCount'),toast:document.getElementById('adminToast'),
+    loginModal:document.getElementById('adminLoginModal'),loginForm:document.getElementById('adminLoginForm'),
+    adminEmail:document.getElementById('adminEmail'),adminPassword:document.getElementById('adminPassword'),
+    loginMessage:document.getElementById('adminLoginMessage'),
+    editorModal:document.getElementById('cardEditorModal'),editorForm:document.getElementById('cardEditorForm'),
+    editorTitle:document.getElementById('cardEditorTitle'),editorMessage:document.getElementById('cardEditorMessage'),
+    cardTag:document.getElementById('editCardTag'),cardTitle:document.getElementById('editCardTitle'),
+    cardDescription:document.getElementById('editCardDescription'),cardUrl:document.getElementById('editCardUrl'),
+    cardCta:document.getElementById('editCardCta'),cardArrow:document.getElementById('editCardArrow'),cardIcon:document.getElementById('editCardIcon'),
+    dbBtn:document.getElementById('dbConfigBtn'),dbStatusText:document.getElementById('dbStatusText'),
+    dbModal:document.getElementById('dbConfigModal'),dbForm:document.getElementById('dbConfigForm'),
+    dbUrl:document.getElementById('supabaseUrl'),dbKey:document.getElementById('supabaseKey'),
+    dbMessage:document.getElementById('dbConfigMessage'),dbClear:document.getElementById('dbConfigClearBtn'),
+    recurringSection:document.getElementById('accesos-recurrentes'),tabs:document.getElementById('categoryTabs'),
+    rows:document.getElementById('shortcutRows'),shortcutForm:document.getElementById('shortcutForm'),
+    shortcutName:document.getElementById('shortcutName'),shortcutUrl:document.getElementById('shortcutUrl'),
+    shortcutCategory:document.getElementById('shortcutCategory'),shortcutAdd:document.getElementById('shortcutAddBtn'),
+    categoryAdd:document.getElementById('categoryAddBtn'),recurringHide:document.getElementById('recurringHideBtn'),
+    shortcutCancel:document.getElementById('shortcutCancelBtn'),shortcutSave:document.getElementById('shortcutSaveBtn')
+  };
+  if(!el.grid||!el.adminBtn)return;
+
+  function clone(value){return JSON.parse(JSON.stringify(value))}
+  function esc(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+  function openModal(modal){if(!modal)return;modal.classList.add('is-open');modal.setAttribute('aria-hidden','false')}
+  function closeModal(modal){if(!modal)return;modal.classList.remove('is-open');modal.setAttribute('aria-hidden','true')}
+  function showToast(message,duration=2800){
+    if(!el.toast)return;el.toast.textContent=message;el.toast.classList.add('show');
+    clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>el.toast.classList.remove('show'),duration);
+  }
+  function setDbStatus(stateName,text){
+    if(el.dbBtn)el.dbBtn.dataset.state=stateName;
+    if(el.dbStatusText)el.dbStatusText.textContent=text;
+  }
+  function setBusy(next){
+    state.busy=Boolean(next);
+    [el.addCardBtn,el.resetCardsBtn,el.syncNowBtn,el.shortcutAdd,el.categoryAdd].forEach(button=>{if(button)button.disabled=state.busy});
+  }
+  function setAdmin(next,email=''){
+    state.isAdmin=Boolean(next);
+    document.body.classList.toggle('admin-mode',state.isAdmin);
+    el.adminBtn.classList.toggle('is-active',state.isAdmin);
+    el.adminBtn.innerHTML=state.isAdmin?'🔓 Salir admin':'🔒 Administrar';
+    el.adminBtn.title=state.isAdmin?(email?`Sesión: ${email}`:'Cerrar sesión de administrador'):'Iniciar sesión de administrador';
+    if(!state.isAdmin)closeShortcutForm();
+  }
+  function loadConfig(){
     try{
-      const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
-      cards=Array.isArray(saved)&&saved.length?saved.filter(validCard):cloneDefaults();
-    }catch{cards=cloneDefaults()}
+      const saved=JSON.parse(localStorage.getItem(CONFIG_KEY)||'null');
+      if(saved?.url&&saved?.key)return saved;
+    }catch{}
+    return EMBEDDED_CONFIG.url&&EMBEDDED_CONFIG.key?{...EMBEDDED_CONFIG}:null;
   }
-  function validCard(card){
-    return card&&card.id&&card.title&&card.tag&&card.description&&card.url;
+  function saveConfig(config){localStorage.setItem(CONFIG_KEY,JSON.stringify(config))}
+  function normalizeConfig(url,key){
+    const cleanUrl=String(url||'').trim().replace(/\/$/,'');
+    const cleanKey=String(key||'').trim();
+    const parsed=new URL(cleanUrl);
+    if(parsed.protocol!=='https:'||!parsed.hostname)throw new Error('La Project URL debe ser una dirección HTTPS válida.');
+    if(cleanKey.length<30)throw new Error('La llave pública parece incompleta.');
+    return {url:cleanUrl,key:cleanKey};
   }
-  function saveCards(){localStorage.setItem(STORAGE_KEY,JSON.stringify(cards))}
-  function esc(value){
-    return String(value??'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+  function normalizeUrl(raw,allowHash=false){
+    const value=String(raw||'').trim();
+    if(allowHash&&value.startsWith('#')&&value.length>1)return value;
+    const parsed=new URL(value);
+    if(!['http:','https:'].includes(parsed.protocol))throw new Error('El enlace debe iniciar con http:// o https://.');
+    return parsed.href;
   }
+
   function iconSvg(name){
     const common='width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text2)"';
     const icons={
@@ -1360,372 +1501,339 @@ body.admin-mode .card-num{top:4.95rem}
       link:'<path d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L11 4.93"/><path d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07L13 19.07"/>',
       chart:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-7"/><path d="M16 7h3v3"/>'
     };
-    return '<svg '+common+'>'+(icons[name]||icons.link)+'</svg>';
+    return `<svg ${common}>${icons[name]||icons.link}</svg>`;
   }
-  function render(){
-    grid.innerHTML=cards.map((card,index)=>{
+
+  function renderCards(){
+    el.grid.innerHTML=state.cards.map((card,index)=>{
       const special=card.url==='#accesos-recurrentes'?' id="recurringAccessCard"':'';
       const number=String(index+1).padStart(2,'0');
-      const arrow=card.arrow==='down'?'\u2193':'\u2192';
-      return '<article class="tool-card" role="link" tabindex="0" data-card-id="'+esc(card.id)+'"'+special+'>'+
-        '<div class="card-admin-actions" aria-label="Administrar tarjeta">'+
-          '<button type="button" data-card-action="up" title="Mover arriba">\u2191</button>'+
-          '<button type="button" data-card-action="down" title="Mover abajo">\u2193</button>'+
-          '<button type="button" data-card-action="edit">Editar</button>'+
-          '<button class="danger" type="button" data-card-action="delete">Eliminar</button>'+
-        '</div>'+
-        '<div class="card-num">'+number+'</div>'+
-        '<div class="card-top"><div class="card-icon">'+iconSvg(card.icon)+'</div>'+
-          '<div class="card-tag">'+esc(card.tag)+'</div>'+
-          '<h3 class="card-title">'+esc(card.title)+'</h3>'+
-          '<p class="card-desc">'+esc(card.description)+'</p></div>'+
-        '<div class="card-footer"><span class="card-cta">'+esc(card.cta||'Ingresar')+'</span><span class="card-arrow">'+arrow+'</span></div>'+
-      '</article>';
+      const arrow=card.arrow==='down'?'↓':'→';
+      return `<article class="tool-card" role="link" tabindex="0" data-card-id="${esc(card.id)}"${special}>
+        <div class="card-admin-actions" aria-label="Administrar tarjeta">
+          <button type="button" data-card-action="up" title="Mover arriba">↑</button>
+          <button type="button" data-card-action="down" title="Mover abajo">↓</button>
+          <button type="button" data-card-action="edit">Editar</button>
+          <button class="danger" type="button" data-card-action="delete">Eliminar</button>
+        </div>
+        <div class="card-num">${number}</div>
+        <div class="card-top"><div class="card-icon">${iconSvg(card.icon)}</div>
+          <div class="card-tag">${esc(card.tag)}</div>
+          <h3 class="card-title">${esc(card.title)}</h3>
+          <p class="card-desc">${esc(card.description)}</p></div>
+        <div class="card-footer"><span class="card-cta">${esc(card.cta||'Ingresar')}</span><span class="card-arrow">${arrow}</span></div>
+      </article>`;
     }).join('');
-    const count=String(cards.length).padStart(2,'0');
-    if(countActive)countActive.textContent=count;
-    if(countEditable)countEditable.textContent=count;
+    const count=String(state.cards.length).padStart(2,'0');
+    if(el.countActive)el.countActive.textContent=count;
+    if(el.countEditable)el.countEditable.textContent=count;
   }
-  function setAdmin(next){
-    isAdmin=Boolean(next);
-    document.body.classList.toggle('admin-mode',isAdmin);
-    adminBtn.classList.toggle('is-active',isAdmin);
-    adminBtn.innerHTML=isAdmin?'\ud83d\udd13 Salir admin':'\ud83d\udd12 Administrar';
-    if(isAdmin)sessionStorage.setItem(SESSION_KEY,'1');else sessionStorage.removeItem(SESSION_KEY);
+  function renderTabs(){
+    if(!el.tabs||!el.shortcutCategory)return;
+    const all=['Todas',...state.categories];
+    el.tabs.innerHTML=all.map(category=>`<button class="category-tab ${category===state.activeCategory?'active':''}" type="button" data-category="${esc(category)}">${esc(category)}</button>`).join('');
+    el.shortcutCategory.innerHTML=state.categories.map(category=>`<option value="${esc(category)}">${esc(category)}</option>`).join('');
   }
-  function openModal(modal){modal.classList.add('is-open');modal.setAttribute('aria-hidden','false')}
-  function closeModal(modal){modal.classList.remove('is-open');modal.setAttribute('aria-hidden','true')}
-  function showToast(message){
-    toast.textContent=message;toast.classList.add('show');
-    clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>toast.classList.remove('show'),2400);
+  function renderShortcuts(){
+    if(!el.rows)return;
+    const visible=state.activeCategory==='Todas'?state.shortcuts:state.shortcuts.filter(item=>item.category===state.activeCategory);
+    if(!visible.length){el.rows.innerHTML='<div class="recurring-empty">No hay accesos en esta categoría.</div>';return;}
+    el.rows.innerHTML=visible.map(item=>`<div class="shortcut-row" data-id="${esc(item.id)}">
+      <div class="shortcut-name">${esc(item.name)}</div>
+      <div class="shortcut-url">${esc(item.url)}</div>
+      <div class="shortcut-category">${esc(item.category)}</div>
+      <div class="shortcut-actions">
+        <a class="shortcut-open" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">Abrir</a>
+        <button class="menu-btn" type="button" data-action="menu" aria-label="Opciones">⋯</button>
+      </div>
+      <div class="row-menu"><button type="button" data-action="edit">Editar</button><button type="button" data-action="delete">Eliminar</button></div>
+    </div>`).join('');
   }
-  async function sha256(value){
-    if(!window.crypto||!crypto.subtle)return null;
-    const data=new TextEncoder().encode(value);
-    const hash=await crypto.subtle.digest('SHA-256',data);
-    return Array.from(new Uint8Array(hash)).map((b)=>b.toString(16).padStart(2,'0')).join('');
-  }
-  async function passwordMatches(value){
-    try{
-      const digest=await sha256(value);
-      if(digest)return digest===PASSWORD_SHA256;
-    }catch{}
-    try{return btoa(unescape(encodeURIComponent(value)))===PASSWORD_FALLBACK_B64}catch{return false}
-  }
-  function normalizeUrl(raw){
-    const value=raw.trim();
-    if(value.startsWith('#')&&value.length>1)return value;
-    const parsed=new URL(value);
-    if(!['http:','https:'].includes(parsed.protocol))throw new Error('El enlace debe iniciar con http://, https:// o #.');
-    return parsed.href;
-  }
-  function openEditor(card){
-    editingId=card?.id||null;
-    editorTitle.textContent=editingId?'EDITAR TARJETA':'AGREGAR TARJETA';
-    tagInput.value=card?.tag||'';
-    titleInput.value=card?.title||'';
-    descriptionInput.value=card?.description||'';
-    urlInput.value=card?.url||'https://';
-    ctaInput.value=card?.cta||'Ingresar';
-    arrowInput.value=card?.arrow||'right';
-    iconInput.value=card?.icon||'link';
-    editorMessage.textContent='';
-    openModal(editorModal);
-    setTimeout(()=>titleInput.focus(),60);
-  }
-  function moveCard(id,direction){
-    const from=cards.findIndex((card)=>card.id===id);
-    const to=from+direction;
-    if(from<0||to<0||to>=cards.length)return;
-    [cards[from],cards[to]]=[cards[to],cards[from]];
-    saveCards();render();showToast('Orden actualizado.');
-  }
-  function openCard(card){
-    if(card.url.startsWith('#')){
-      const section=document.querySelector(card.url);
-      if(section){section.classList.add('is-open');section.scrollIntoView({behavior:'smooth',block:'start'});}
-      return;
+  function renderAll(){renderCards();renderTabs();renderShortcuts()}
+
+  function cardToRow(card,index){return {id:card.id,tag:card.tag,title:card.title,description:card.description,url:card.url,cta:card.cta||'Ingresar',arrow:card.arrow||'right',icon:card.icon||'link',sort_order:index}}
+  function rowToCard(row){return {id:row.id,tag:row.tag,title:row.title,description:row.description,url:row.url,cta:row.cta,arrow:row.arrow,icon:row.icon}}
+  function categoryToRow(name,index){return {name,sort_order:index}}
+  function shortcutToRow(item,index){return {id:item.id,name:item.name,url:item.url,category:item.category,sort_order:index}}
+
+  async function loadAll({quiet=false}={}){
+    if(!state.client){renderAll();return false;}
+    if(!quiet)setDbStatus('syncing','Sincronizando');
+    const [cardRes,categoryRes,shortcutRes]=await Promise.all([
+      state.client.from('planning_cards').select('*').order('sort_order',{ascending:true}),
+      state.client.from('planning_categories').select('*').order('sort_order',{ascending:true}),
+      state.client.from('planning_shortcuts').select('*').order('sort_order',{ascending:true})
+    ]);
+    const error=cardRes.error||categoryRes.error||shortcutRes.error;
+    if(error){
+      setDbStatus('error','Error de BD');
+      renderAll();
+      if(!quiet)showToast('No se pudieron leer las tablas de Supabase. Ejecuta supabase_setup.sql.',5000);
+      throw error;
     }
+    state.cards=cardRes.data.length?cardRes.data.map(rowToCard):clone(DEFAULT_CARDS);
+    state.categories=categoryRes.data.length?categoryRes.data.map(row=>row.name):[...DEFAULT_CATEGORIES];
+    state.shortcuts=shortcutRes.data.length?shortcutRes.data.map(row=>({id:row.id,name:row.name,url:row.url,category:row.category})):clone(DEFAULT_SHORTCUTS);
+    if(state.activeCategory!=='Todas'&&!state.categories.includes(state.activeCategory))state.activeCategory='Todas';
+    renderAll();setDbStatus('connected','Supabase conectado');return true;
+  }
+
+  async function seedEmptyTables(){
+    if(!state.client||!state.isAdmin)return;
+    const [cardsCount,categoriesCount,shortcutsCount]=await Promise.all([
+      state.client.from('planning_cards').select('id',{count:'exact',head:true}),
+      state.client.from('planning_categories').select('name',{count:'exact',head:true}),
+      state.client.from('planning_shortcuts').select('id',{count:'exact',head:true})
+    ]);
+    const countError=cardsCount.error||categoriesCount.error||shortcutsCount.error;
+    if(countError)throw countError;
+    if(cardsCount.count===0){const {error}=await state.client.from('planning_cards').upsert(DEFAULT_CARDS.map(cardToRow));if(error)throw error;}
+    if(categoriesCount.count===0){const {error}=await state.client.from('planning_categories').upsert(DEFAULT_CATEGORIES.map(categoryToRow));if(error)throw error;}
+    if(shortcutsCount.count===0){const {error}=await state.client.from('planning_shortcuts').upsert(DEFAULT_SHORTCUTS.map(shortcutToRow));if(error)throw error;}
+  }
+
+  function scheduleReload(){clearTimeout(state.reloadTimer);state.reloadTimer=setTimeout(()=>loadAll({quiet:true}).catch(()=>{}),450)}
+  function subscribeRealtime(){
+    if(!state.client)return;
+    if(state.channel)state.client.removeChannel(state.channel);
+    state.channel=state.client.channel('i-planning-content')
+      .on('postgres_changes',{event:'*',schema:'public',table:'planning_cards'},scheduleReload)
+      .on('postgres_changes',{event:'*',schema:'public',table:'planning_categories'},scheduleReload)
+      .on('postgres_changes',{event:'*',schema:'public',table:'planning_shortcuts'},scheduleReload)
+      .subscribe();
+  }
+
+  async function verifyAdminSession(session){
+    if(!session?.user?.id||!state.client)return false;
+    const {data,error}=await state.client.rpc('is_planning_admin');
+    if(error)throw error;
+    return data===true;
+  }
+
+  async function refreshAdminFromSession(session){
+    try{
+      const allowed=await verifyAdminSession(session);
+      setAdmin(allowed,allowed?(session?.user?.email||''):'');
+      return allowed;
+    }catch(error){setAdmin(false);console.error('No se pudo verificar el rol administrador:',error);return false;}
+  }
+
+  async function initSupabase({quiet=false}={}){
+    const config=loadConfig();
+    if(!config){state.client=null;setAdmin(false);setDbStatus('idle','Configurar BD');renderAll();return false;}
+    if(!window.supabase?.createClient){setDbStatus('error','Librería no disponible');throw new Error('No se pudo cargar la librería de Supabase. Revisa la conexión a internet.');}
+    if(state.channel&&state.client)await state.client.removeChannel(state.channel);
+    state.authSubscription?.unsubscribe?.();
+    state.client=window.supabase.createClient(config.url,config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+    const {data:{session},error:sessionError}=await state.client.auth.getSession();
+    if(sessionError)throw sessionError;
+    await refreshAdminFromSession(session);
+    const authListener=state.client.auth.onAuthStateChange((event,newSession)=>{
+      setTimeout(()=>refreshAdminFromSession(newSession),0);
+      if(event==='SIGNED_IN'||event==='SIGNED_OUT')scheduleReload();
+    });
+    state.authSubscription=authListener.data.subscription;
+    try{await loadAll({quiet});subscribeRealtime();return true;}
+    catch(error){if(!quiet)throw error;return false;}
+  }
+
+  async function requireAdmin(){
+    if(!state.client){showToast('Configura primero la conexión con Supabase.');openDbConfig();return false;}
+    if(!state.isAdmin){showToast('Debes iniciar sesión como administrador.');openLogin();return false;}
+    if(state.busy)return false;
+    return true;
+  }
+  async function saveAllCards(message){
+    if(!(await requireAdmin()))return false;
+    setBusy(true);setDbStatus('syncing','Guardando');
+    try{
+      const {error}=await state.client.from('planning_cards').upsert(state.cards.map(cardToRow));
+      if(error)throw error;
+      setDbStatus('connected','Supabase conectado');renderCards();showToast(message);return true;
+    }catch(error){showToast(`No se guardó: ${error.message||error}`,5000);await loadAll({quiet:true}).catch(()=>{});return false;}
+    finally{setBusy(false)}
+  }
+
+  function openLogin(){
+    if(!state.client){openDbConfig();return;}
+    el.loginMessage.textContent='';
+    el.adminEmail.value=localStorage.getItem(LAST_EMAIL_KEY)||'';
+    el.adminPassword.value='';openModal(el.loginModal);
+    setTimeout(()=>el.adminEmail.value?el.adminPassword.focus():el.adminEmail.focus(),60);
+  }
+  function openDbConfig(message=''){
+    const config=loadConfig();
+    el.dbUrl.value=config?.url||'';el.dbKey.value=config?.key||'';el.dbMessage.textContent=message;
+    openModal(el.dbModal);setTimeout(()=>el.dbUrl.focus(),60);
+  }
+  function openCardEditor(card){
+    state.editingCardId=card?.id||null;
+    el.editorTitle.textContent=state.editingCardId?'EDITAR TARJETA':'AGREGAR TARJETA';
+    el.cardTag.value=card?.tag||'';el.cardTitle.value=card?.title||'';el.cardDescription.value=card?.description||'';
+    el.cardUrl.value=card?.url||'https://';el.cardCta.value=card?.cta||'Ingresar';el.cardArrow.value=card?.arrow||'right';el.cardIcon.value=card?.icon||'link';
+    el.editorMessage.textContent='';openModal(el.editorModal);setTimeout(()=>el.cardTitle.focus(),60);
+  }
+  function openShortcutForm(item){
+    if(!state.isAdmin){openLogin();return;}
+    state.editingShortcutId=item?.id||null;
+    el.shortcutName.value=item?.name||'';el.shortcutUrl.value=item?.url||'';
+    el.shortcutCategory.value=item?.category||((state.activeCategory==='Todas')?state.categories[0]:state.activeCategory);
+    el.shortcutSave.textContent=state.editingShortcutId?'Actualizar':'Guardar';el.shortcutForm.classList.add('is-open');setTimeout(()=>el.shortcutName.focus(),60);
+  }
+  function closeShortcutForm(){
+    state.editingShortcutId=null;if(el.shortcutForm){el.shortcutForm.reset();el.shortcutForm.classList.remove('is-open')}if(el.shortcutSave)el.shortcutSave.textContent='Guardar';
+  }
+  function closeMenus(){el.rows?.querySelectorAll('.shortcut-row.menu-open').forEach(row=>row.classList.remove('menu-open'))}
+  function openCard(card){
+    if(card.url.startsWith('#')){const section=document.querySelector(card.url);if(section){section.classList.add('is-open');section.scrollIntoView({behavior:'smooth',block:'start'});}return;}
     window.open(card.url,'_blank','noopener,noreferrer');
   }
 
-  adminBtn.addEventListener('click',()=>{
-    if(isAdmin){setAdmin(false);showToast('Modo administrador cerrado.');return;}
-    loginMessage.textContent='';passwordInput.value='';openModal(loginModal);setTimeout(()=>passwordInput.focus(),60);
+  el.dbBtn?.addEventListener('click',()=>openDbConfig());
+  el.dbForm?.addEventListener('submit',async event=>{
+    event.preventDefault();el.dbMessage.textContent='Probando conexión...';
+    try{
+      const config=normalizeConfig(el.dbUrl.value,el.dbKey.value);saveConfig(config);
+      const ok=await initSupabase({quiet:false});
+      if(!ok)throw new Error('La configuración se guardó, pero no se pudieron leer las tablas.');
+      el.dbMessage.textContent='Conexión correcta.';showToast('Supabase conectado correctamente.');setTimeout(()=>closeModal(el.dbModal),500);
+    }catch(error){el.dbMessage.textContent=error.message||'No fue posible conectar. Revisa los datos y ejecuta el SQL de instalación.';}
   });
-  addBtn?.addEventListener('click',()=>{if(isAdmin)openEditor(null)});
-  resetBtn?.addEventListener('click',()=>{
-    if(!isAdmin)return;
-    if(!confirm('Se eliminaran las modificaciones realizadas en este navegador. Continuar?'))return;
-    cards=cloneDefaults();saveCards();render();showToast('Tarjetas restablecidas.');
+  el.dbClear?.addEventListener('click',async()=>{
+    if(!confirm('¿Quitar la configuración de Supabase de este navegador?'))return;
+    try{await state.client?.auth.signOut()}catch{}
+    if(state.channel&&state.client)await state.client.removeChannel(state.channel);
+    localStorage.removeItem(CONFIG_KEY);state.client=null;state.cards=clone(DEFAULT_CARDS);state.categories=[...DEFAULT_CATEGORIES];state.shortcuts=clone(DEFAULT_SHORTCUTS);
+    setAdmin(false);setDbStatus('idle','Configurar BD');renderAll();closeModal(el.dbModal);showToast('Configuración eliminada.');
   });
-  loginForm.addEventListener('submit',async(event)=>{
-    event.preventDefault();loginMessage.textContent='Verificando...';
-    if(await passwordMatches(passwordInput.value)){
-      setAdmin(true);closeModal(loginModal);showToast('Modo administrador activo.');
-    }else{loginMessage.textContent='Contrasena incorrecta.';passwordInput.select();}
+
+  el.adminBtn.addEventListener('click',async()=>{
+    if(state.isAdmin){
+      setBusy(true);try{await state.client.auth.signOut();setAdmin(false);showToast('Sesión de administrador cerrada.')}catch(error){showToast(error.message||'No fue posible cerrar sesión.')}finally{setBusy(false)}
+      return;
+    }
+    openLogin();
   });
-  editorForm.addEventListener('submit',(event)=>{
-    event.preventDefault();editorMessage.textContent='';
+  el.loginForm?.addEventListener('submit',async event=>{
+    event.preventDefault();el.loginMessage.textContent='Verificando en Supabase...';
+    try{
+      const email=el.adminEmail.value.trim();
+      const {data,error}=await state.client.auth.signInWithPassword({email,password:el.adminPassword.value});
+      if(error)throw error;
+      const allowed=await verifyAdminSession(data.session);
+      if(!allowed){await state.client.auth.signOut();throw new Error('Este usuario no está registrado como administrador de i Planning.');}
+      localStorage.setItem(LAST_EMAIL_KEY,email);setAdmin(true,data.user?.email||email);
+      await seedEmptyTables();await loadAll({quiet:true});closeModal(el.loginModal);showToast('Modo administrador activo.');
+    }catch(error){el.loginMessage.textContent=error.message||'No fue posible iniciar sesión.';el.adminPassword.select();}
+  });
+
+  el.syncNowBtn?.addEventListener('click',async()=>{
+    if(!state.client){openDbConfig();return;}
+    try{setBusy(true);await loadAll();showToast('Contenido sincronizado.')}catch{}finally{setBusy(false)}
+  });
+  el.addCardBtn?.addEventListener('click',async()=>{if(await requireAdmin())openCardEditor(null)});
+  el.resetCardsBtn?.addEventListener('click',async()=>{
+    if(!(await requireAdmin()))return;
+    if(!confirm('¿Restablecer las tarjetas originales para todos los usuarios?'))return;
+    setBusy(true);setDbStatus('syncing','Restableciendo');
+    try{
+      const deleteRes=await state.client.from('planning_cards').delete().neq('id','');if(deleteRes.error)throw deleteRes.error;
+      state.cards=clone(DEFAULT_CARDS);const insertRes=await state.client.from('planning_cards').upsert(state.cards.map(cardToRow));if(insertRes.error)throw insertRes.error;
+      renderCards();setDbStatus('connected','Supabase conectado');showToast('Tarjetas originales restablecidas.');
+    }catch(error){showToast(`No se pudo restablecer: ${error.message||error}`,5000);await loadAll({quiet:true}).catch(()=>{});}
+    finally{setBusy(false)}
+  });
+
+  el.editorForm?.addEventListener('submit',async event=>{
+    event.preventDefault();el.editorMessage.textContent='';
+    if(!(await requireAdmin()))return;
     try{
       const card={
-        id:editingId||('card-'+Date.now().toString(36)),
-        tag:tagInput.value.trim(),title:titleInput.value.trim(),description:descriptionInput.value.trim(),
-        url:normalizeUrl(urlInput.value),cta:ctaInput.value.trim(),arrow:arrowInput.value,icon:iconInput.value
+        id:state.editingCardId||(`card-${Date.now().toString(36)}`),tag:el.cardTag.value.trim(),title:el.cardTitle.value.trim(),
+        description:el.cardDescription.value.trim(),url:normalizeUrl(el.cardUrl.value,true),cta:el.cardCta.value.trim(),arrow:el.cardArrow.value,icon:el.cardIcon.value
       };
       if(!card.tag||!card.title||!card.description||!card.cta)throw new Error('Completa todos los campos.');
-      cards=editingId?cards.map((item)=>item.id===editingId?card:item):[...cards,card];
-      saveCards();render();closeModal(editorModal);showToast(editingId?'Tarjeta actualizada.':'Tarjeta agregada.');
-    }catch(error){editorMessage.textContent=error.message||'No fue posible guardar la tarjeta.';}
+      state.cards=state.editingCardId?state.cards.map(item=>item.id===state.editingCardId?card:item):[...state.cards,card];
+      const saved=await saveAllCards(state.editingCardId?'Tarjeta actualizada en Supabase.':'Tarjeta agregada en Supabase.');
+      if(saved)closeModal(el.editorModal);
+    }catch(error){el.editorMessage.textContent=error.message||'No fue posible guardar la tarjeta.';}
   });
-  grid.addEventListener('click',(event)=>{
-    const tile=event.target.closest('.tool-card');
-    if(!tile)return;
-    const card=cards.find((item)=>item.id===tile.dataset.cardId);
-    if(!card)return;
+
+  el.grid.addEventListener('click',async event=>{
+    const tile=event.target.closest('.tool-card');if(!tile)return;
+    const card=state.cards.find(item=>item.id===tile.dataset.cardId);if(!card)return;
     const action=event.target.closest('[data-card-action]')?.dataset.cardAction;
-    if(action){
-      event.preventDefault();event.stopPropagation();if(!isAdmin)return;
-      if(action==='edit')openEditor(card);
-      if(action==='up')moveCard(card.id,-1);
-      if(action==='down')moveCard(card.id,1);
-      if(action==='delete'&&confirm('Eliminar la tarjeta "'+card.title+'"?')){
-        cards=cards.filter((item)=>item.id!==card.id);saveCards();render();showToast('Tarjeta eliminada.');
-      }
-      return;
+    if(!action){openCard(card);return;}
+    event.preventDefault();event.stopPropagation();if(!(await requireAdmin()))return;
+    if(action==='edit'){openCardEditor(card);return;}
+    if(action==='delete'){
+      if(!confirm(`¿Eliminar la tarjeta "${card.title}" para todos los usuarios?`))return;
+      setBusy(true);setDbStatus('syncing','Eliminando');
+      try{
+        const {error}=await state.client.from('planning_cards').delete().eq('id',card.id);if(error)throw error;
+        state.cards=state.cards.filter(item=>item.id!==card.id);
+        if(state.cards.length){const reorder=await state.client.from('planning_cards').upsert(state.cards.map(cardToRow));if(reorder.error)throw reorder.error;}
+        renderCards();setDbStatus('connected','Supabase conectado');showToast('Tarjeta eliminada.');
+      }catch(error){showToast(`No se eliminó: ${error.message||error}`,5000);await loadAll({quiet:true}).catch(()=>{});}
+      finally{setBusy(false)}return;
     }
-    openCard(card);
+    const from=state.cards.findIndex(item=>item.id===card.id),to=from+(action==='up'?-1:1);
+    if(from<0||to<0||to>=state.cards.length)return;
+    [state.cards[from],state.cards[to]]=[state.cards[to],state.cards[from]];
+    await saveAllCards('Orden actualizado en Supabase.');
   });
-  grid.addEventListener('keydown',(event)=>{
-    if(!['Enter',' '].includes(event.key)||event.target.closest('button'))return;
-    event.preventDefault();event.target.click();
+  el.grid.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key)||event.target.closest('button'))return;event.preventDefault();event.target.click()});
+
+  el.recurringHide?.addEventListener('click',()=>{closeShortcutForm();closeMenus();el.recurringSection.classList.remove('is-open');document.getElementById('recurringAccessCard')?.scrollIntoView({behavior:'smooth',block:'center'})});
+  el.shortcutAdd?.addEventListener('click',async()=>{if(await requireAdmin())openShortcutForm(null)});
+  el.shortcutCancel?.addEventListener('click',closeShortcutForm);
+  el.categoryAdd?.addEventListener('click',async()=>{
+    if(!(await requireAdmin()))return;
+    const name=prompt('Nombre de la nueva categoría:');if(!name)return;const cleaned=name.trim();
+    if(!cleaned||state.categories.some(category=>category.toLowerCase()===cleaned.toLowerCase()))return;
+    setBusy(true);
+    try{
+      const {error}=await state.client.from('planning_categories').insert({name:cleaned,sort_order:state.categories.length});if(error)throw error;
+      state.categories.push(cleaned);state.activeCategory=cleaned;renderTabs();renderShortcuts();openShortcutForm(null);showToast('Categoría guardada en Supabase.');
+    }catch(error){showToast(`No se guardó la categoría: ${error.message||error}`,5000)}finally{setBusy(false)}
   });
-  document.addEventListener('click',(event)=>{
-    const close=event.target.closest('[data-close-modal]');
-    if(close){const modal=document.getElementById(close.dataset.closeModal);if(modal)closeModal(modal);}
+  el.tabs?.addEventListener('click',event=>{const button=event.target.closest('button[data-category]');if(!button)return;state.activeCategory=button.dataset.category;closeMenus();renderTabs();renderShortcuts()});
+  el.rows?.addEventListener('click',async event=>{
+    const button=event.target.closest('button[data-action]');if(!button)return;
+    const row=button.closest('.shortcut-row'),item=state.shortcuts.find(shortcut=>shortcut.id===row?.dataset.id);if(!item)return;
+    if(button.dataset.action==='menu'){const wasOpen=row.classList.contains('menu-open');closeMenus();row.classList.toggle('menu-open',!wasOpen);return;}
+    closeMenus();if(!(await requireAdmin()))return;
+    if(button.dataset.action==='edit'){openShortcutForm(item);return;}
+    if(!confirm(`¿Eliminar el acceso "${item.name}"?`))return;
+    setBusy(true);
+    try{
+      const {error}=await state.client.from('planning_shortcuts').delete().eq('id',item.id);if(error)throw error;
+      state.shortcuts=state.shortcuts.filter(shortcut=>shortcut.id!==item.id);renderShortcuts();showToast('Acceso eliminado de Supabase.');
+    }catch(error){showToast(`No se eliminó: ${error.message||error}`,5000)}finally{setBusy(false)}
+  });
+  el.shortcutForm?.addEventListener('submit',async event=>{
+    event.preventDefault();if(!(await requireAdmin()))return;
+    try{
+      const item={id:state.editingShortcutId||Date.now().toString(36),name:el.shortcutName.value.trim(),url:normalizeUrl(el.shortcutUrl.value),category:el.shortcutCategory.value};
+      if(!item.name)throw new Error('Nombre requerido.');
+      const position=state.editingShortcutId?state.shortcuts.findIndex(value=>value.id===state.editingShortcutId):state.shortcuts.length;
+      setBusy(true);const {error}=await state.client.from('planning_shortcuts').upsert(shortcutToRow(item,Math.max(0,position)));if(error)throw error;
+      state.shortcuts=state.editingShortcutId?state.shortcuts.map(value=>value.id===state.editingShortcutId?item:value):[...state.shortcuts,item];
+      state.activeCategory=item.category;closeShortcutForm();renderTabs();renderShortcuts();showToast('Acceso guardado en Supabase.');
+    }catch(error){showToast(`No se guardó: ${error.message||error}`,5000);el.shortcutUrl.focus()}finally{setBusy(false)}
+  });
+
+  document.addEventListener('click',event=>{
+    const close=event.target.closest('[data-close-modal]');if(close){const modal=document.getElementById(close.dataset.closeModal);if(modal)closeModal(modal)}
     if(event.target.classList.contains('admin-modal'))closeModal(event.target);
+    if(el.rows&&!el.rows.contains(event.target))closeMenus();
   });
-  document.addEventListener('keydown',(event)=>{
-    if(event.key!=='Escape')return;
-    document.querySelectorAll('.admin-modal.is-open').forEach(closeModal);
-  });
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')document.querySelectorAll('.admin-modal.is-open').forEach(closeModal)});
 
-  loadCards();render();setAdmin(isAdmin);
+  renderAll();setAdmin(false);setDbStatus('idle','Configurar BD');
+  const config=loadConfig();if(config){el.dbUrl.value=config.url;el.dbKey.value=config.key;initSupabase({quiet:true}).catch(error=>{setDbStatus('error','Error de BD');console.error(error)})}
 })();
 
-
-/* -- ACCESOS RECURRENTES ---------------- */
-(function(){
-  const section=document.getElementById('accesos-recurrentes');
-  const tabs=document.getElementById('categoryTabs');
-  const rows=document.getElementById('shortcutRows');
-  const form=document.getElementById('shortcutForm');
-  const nameInput=document.getElementById('shortcutName');
-  const urlInput=document.getElementById('shortcutUrl');
-  const categoryInput=document.getElementById('shortcutCategory');
-  const addBtn=document.getElementById('shortcutAddBtn');
-  const addCategoryBtn=document.getElementById('categoryAddBtn');
-  const hideBtn=document.getElementById('recurringHideBtn');
-  const cancelBtn=document.getElementById('shortcutCancelBtn');
-  const saveBtn=document.getElementById('shortcutSaveBtn');
-  if(!section||!tabs||!rows||!form)return;
-
-  const STORAGE_KEY='tata_accesos_recurrentes_v1';
-  const defaultCategories=['Monitoreo','Análisis','Control','Operación','Proyectos','Planificación','Maestros'];
-  const defaultShortcuts=[
-    {id:'eficiencia',name:'Eficiencia en vivo',url:'https://erp.tataguatemala.com/dashboards/eficiencia',category:'Monitoreo'},
-    {id:'balances',name:'Balances',url:'https://balarcon-tata.github.io/Engineering-Nexus/',category:'Análisis'},
-    {id:'auditoria',name:'Auditoría de planes',url:'https://erp.tataguatemala.com/dashboards/congelado',category:'Control'},
-    {id:'ocupacion',name:'Ocupación',url:'http://172.16.3.127:3000/login',category:'Operación'},
-    {id:'despachos',name:'Despachos',url:'http://citizenapps.tata/troquel/#/operacion',category:'Operación'},
-    {id:'muestras',name:'Planif. muestras',url:'https://balarcon-tata.github.io/fastreact-muestras/',category:'Planificación'},
-    {id:'monday',name:'Monday proyectos',url:'https://tataaccessories.monday.com/boards/18413169480',category:'Proyectos'},
-    {id:'maestros-eficiencia',name:'Maestros de eficiencia',url:'https://www.tata.com.gt',category:'Maestros'}
-  ];
-
-  let categories=[...defaultCategories];
-  let activeCategory='Todas';
-  let editingId=null;
-  let shortcuts=[...defaultShortcuts];
-
-  function loadState(){
-    try{
-      const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
-      if(!saved)return;
-      if(Array.isArray(saved.categories))categories=saved.categories.filter(Boolean);
-      if(Array.isArray(saved.shortcuts))shortcuts=saved.shortcuts.filter((item)=>item&&item.id&&item.name&&item.url&&item.category);
-      if(categories.length===0)categories=[...defaultCategories];
-    }catch{
-      categories=[...defaultCategories];
-      shortcuts=[...defaultShortcuts];
-    }
-  }
-
-  function saveState(){
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({categories,shortcuts}));
-  }
-
-  function escapeText(value){
-    return String(value).replace(/[&<>"']/g,(char)=>({
-      '&':'&amp;',
-      '<':'&lt;',
-      '>':'&gt;',
-      '"':'&quot;',
-      "'":'&#039;'
-    }[char]));
-  }
-
-  function normalizeUrl(raw){
-    const url=new URL(raw.trim());
-    if(!['http:','https:'].includes(url.protocol)){
-      throw new Error('La URL debe iniciar con http:// o https://.');
-    }
-    return url.href;
-  }
-
-  function closeMenus(){
-    rows.querySelectorAll('.shortcut-row.menu-open').forEach((row)=>row.classList.remove('menu-open'));
-  }
-
-  function renderTabs(){
-    const all=['Todas',...categories];
-    tabs.innerHTML=all.map((category)=>`
-      <button class="category-tab ${category===activeCategory?'active':''}" type="button" data-category="${escapeText(category)}">
-        ${escapeText(category)}
-      </button>
-    `).join('');
-    categoryInput.innerHTML=categories.map((category)=>`<option value="${escapeText(category)}">${escapeText(category)}</option>`).join('');
-  }
-
-  function renderRows(){
-    const visible=activeCategory==='Todas'
-      ?shortcuts
-      :shortcuts.filter((item)=>item.category===activeCategory);
-    if(visible.length===0){
-      rows.innerHTML='<div class="recurring-empty">No hay accesos en esta categoría.</div>';
-      return;
-    }
-    rows.innerHTML=visible.map((item)=>`
-      <div class="shortcut-row" data-id="${escapeText(item.id)}">
-        <div class="shortcut-name">${escapeText(item.name)}</div>
-        <div class="shortcut-url">${escapeText(item.url)}</div>
-        <div class="shortcut-category">${escapeText(item.category)}</div>
-        <div class="shortcut-actions">
-          <a class="shortcut-open" href="${escapeText(item.url)}" target="_blank" rel="noopener noreferrer">Abrir</a>
-          <button class="menu-btn" type="button" data-action="menu" aria-label="Opciones">⋯</button>
-        </div>
-        <div class="row-menu">
-          <button type="button" data-action="edit">Editar</button>
-          <button type="button" data-action="delete">Eliminar</button>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  function render(){
-    renderTabs();
-    renderRows();
-  }
-
-  function openForm(item){
-    editingId=item?.id||null;
-    nameInput.value=item?.name||'';
-    urlInput.value=item?.url||'';
-    categoryInput.value=item?.category||((activeCategory==='Todas')?categories[0]:activeCategory);
-    saveBtn.textContent=editingId?'Actualizar':'Guardar';
-    form.classList.add('is-open');
-    setTimeout(()=>nameInput.focus(),60);
-  }
-
-  function closeForm(){
-    editingId=null;
-    form.reset();
-    saveBtn.textContent='Guardar';
-    form.classList.remove('is-open');
-  }
-
-
-  hideBtn?.addEventListener('click',()=>{
-    closeForm();
-    closeMenus();
-    section.classList.remove('is-open');
-    document.getElementById('recurringAccessCard')?.scrollIntoView({behavior:'smooth',block:'center'});
-  });
-
-  addBtn.addEventListener('click',()=>openForm(null));
-  cancelBtn.addEventListener('click',closeForm);
-
-  addCategoryBtn.addEventListener('click',()=>{
-    const name=prompt('Nombre de la nueva categoría:');
-    if(!name)return;
-    const cleaned=name.trim();
-    if(!cleaned || categories.some((category)=>category.toLowerCase()===cleaned.toLowerCase()))return;
-    categories.push(cleaned);
-    activeCategory=cleaned;
-    saveState();
-    render();
-    openForm(null);
-  });
-
-  tabs.addEventListener('click',(event)=>{
-    const button=event.target.closest('button[data-category]');
-    if(!button)return;
-    activeCategory=button.dataset.category;
-    closeMenus();
-    render();
-  });
-
-  rows.addEventListener('click',(event)=>{
-    const button=event.target.closest('button[data-action]');
-    if(!button)return;
-    const row=button.closest('.shortcut-row');
-    const item=shortcuts.find((shortcut)=>shortcut.id===row?.dataset.id);
-    if(!item)return;
-    if(button.dataset.action==='menu'){
-      const wasOpen=row.classList.contains('menu-open');
-      closeMenus();
-      row.classList.toggle('menu-open',!wasOpen);
-      return;
-    }
-    closeMenus();
-    if(button.dataset.action==='edit'){
-      openForm(item);
-      return;
-    }
-    shortcuts=shortcuts.filter((shortcut)=>shortcut.id!==item.id);
-    saveState();
-    render();
-  });
-
-  form.addEventListener('submit',(event)=>{
-    event.preventDefault();
-    try{
-      const next={
-        id:editingId||Date.now().toString(36),
-        name:nameInput.value.trim(),
-        url:normalizeUrl(urlInput.value),
-        category:categoryInput.value
-      };
-      if(!next.name)throw new Error('Nombre requerido');
-      shortcuts=editingId
-        ?shortcuts.map((item)=>item.id===editingId?next:item)
-        :[...shortcuts,next];
-      activeCategory=next.category;
-      saveState();
-      closeForm();
-      render();
-    }catch{
-      urlInput.focus();
-    }
-  });
-
-  document.addEventListener('click',(event)=>{
-    if(!rows.contains(event.target))closeMenus();
-  });
-
-  loadState();
-  render();
-})();
 
 /* ── CALENDARIO OPERATIVO ───────────────── */
 (function(){
